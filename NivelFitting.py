@@ -4,12 +4,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
 
-# 1. Configurações
-caminho_arquivo = 'C:/Users/gusta/Downloads/WT_24C_50__75_85NOHL_26_0304.xlsx'  # Nome do seu arquivo excel
+# ==========================================
+# 1. CONFIGURAÇÕES
+# ==========================================
+# Altere para o caminho do seu arquivo
+caminho_arquivo = 'C:/Users/gusta/Downloads/WT_24C_50__75NOHL_26_0306.xlsx'
 nome_aba = 'Nível'
-tolerancia = 0.10
+tolerancia = 0.5 # Agora a tolerância é de 0.5 mm (fixa)
 
-# 2. Carregar os dados
+# ==========================================
+# 2. CARREGAR E TRATAR DADOS
+# ==========================================
 df = pd.read_excel(caminho_arquivo, sheet_name=nome_aba)
 
 # Função para corrigir valores que o Excel converteu para Data
@@ -18,7 +23,6 @@ def corrigir_valor_on(val):
         return np.nan
     if isinstance(val, (int, float)):
         return float(val)
-    # Se for objeto de data (ex: 2026-05-05), extraímos dia e mês
     try:
         if hasattr(val, 'day') and hasattr(val, 'month'):
             # Lógica: dia 5 e mês 5 -> 5.5; dia 9 e mês 1 -> 9.0
@@ -31,18 +35,22 @@ def corrigir_valor_on(val):
 # Preparar dados de referência (colunas ml e on)
 ref_data = df[['ml', 'on']].dropna().copy()
 ref_data['on_ajustado'] = ref_data['on'].apply(corrigir_valor_on)
-ref_data = ref_data[ref_data['ml'] > 0] # Ignora 0 ml
+ref_data = ref_data[ref_data['ml'] > 0] # Ignora o ponto de 0 ml
 
-# 3. Cálculo das Médias Reais
+# ==========================================
+# 3. CÁLCULO DAS MÉDIAS REAIS (FAIXA FIXA EM MM)
+# ==========================================
 niveis_brutos = df['Nível da Água [mm]'].values
 resultados = []
 
 for _, row in ref_data.iterrows():
     val_ref = row['on_ajustado']
-    limite_inf = val_ref * (1 - tolerancia)
-    limite_sup = val_ref * (1 + tolerancia)
     
-    # Seleciona apenas os pontos na faixa de tolerância
+    # MUDANÇA: Tolerância fixa em mm
+    limite_inf = val_ref - tolerancia
+    limite_sup = val_ref + tolerancia
+    
+    # Seleciona pontos na faixa absoluta (ex: ref +/- 0.5mm)
     faixa_pontos = niveis_brutos[(niveis_brutos >= limite_inf) & (niveis_brutos <= limite_sup)]
     
     if len(faixa_pontos) > 0:
@@ -51,25 +59,35 @@ for _, row in ref_data.iterrows():
 
 df_final = pd.DataFrame(resultados)
 
-# 4. Regressão Linear (Volume ml em função do Nível mm)
+# ==========================================
+# 4. REGRESSÃO LINEAR (ml = f(mm))
+# ==========================================
 X = df_final['mm_real'].values.reshape(-1, 1)
 y = df_final['ml'].values
 modelo = LinearRegression().fit(X, y)
 
-
+# ==========================================
+# 5. VISUALIZAÇÃO E RESULTADOS
+# ==========================================
 plt.figure(figsize=(10, 6))
-plt.scatter(df_final['ml'],df_final['mm_real'], color='blue', label='Dados Reais')
-plt.plot( modelo.predict(X),df_final['mm_real'], color='red', 
-         label=f'Regressão Linear: ml = {modelo.coef_[0]:.4f} * mm + {modelo.intercept_:.4f}\nR²: {modelo.score(X, y):.4f}')
+
+# Plotar os pontos médios calculados
+plt.scatter(df_final['mm_real'], df_final['ml'], color='blue', label='Médias Reais (±0.5mm)')
+
+# Gerar linha de tendência
+x_tendencia = np.array([df_final['mm_real'].min(), df_final['mm_real'].max()]).reshape(-1, 1)
+y_tendencia = modelo.predict(x_tendencia)
+plt.plot(x_tendencia, y_tendencia, color='red', 
+         label=f'Regressão: ml = {modelo.coef_[0]:.4f}*mm + ({modelo.intercept_:.4f})\nR²: {modelo.score(X, y):.4f}')
+
 plt.xlabel('Nível da Água [mm]')
 plt.ylabel('Volume [ml]')
-plt.title('Regressão Linear: Volume ml em função do Nível mm')
+plt.title('Regressão Linear: Volume em função do Nível (Tolerância Fixa 0.5mm)')
 plt.legend()
 plt.grid(True, linestyle='--', alpha=0.7)
 plt.show()
 
-# 5. Exibir Resultados
-print(f"Equação da Regressão: ml = {modelo.coef_[0]:.4f} * mm + {modelo.intercept_:.4f}")
+print(f"Equação da Regressão: ml = {modelo.coef_[0]:.4f} * mm + ({modelo.intercept_:.4f})")
 print(f"R² (Precisão): {modelo.score(X, y):.4f}")
 print("\nTabela de Médias Calculadas:")
 print(df_final)

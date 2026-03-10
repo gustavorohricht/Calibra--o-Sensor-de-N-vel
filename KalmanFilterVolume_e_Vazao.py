@@ -8,9 +8,9 @@ import numpy as np
 # ==========================================
 # 1. CONFIGURAÇÕES
 # ==========================================
-file_path = "C:/Users/gusta/Downloads/WT_24C_50__75_85NOHL_26_0304 (1).xlsx"
-start_idx = 1249
-end_idx = 1543
+file_path = "C:/Users/gusta/Downloads/WT_32C_50__75_85NOHL_26_0305 (1).xlsx"
+start_idx = 1026
+end_idx = 1505
 flow_window = 20 
 Q_val = 0.001  # Ruído de processo para 2ª ordem (menor = mais estável)
 
