@@ -8,9 +8,9 @@ import numpy as np
 # ==========================================
 # 1. CONFIGURAÇÕES
 # ==========================================
-file_path = "C:/Users/gusta/Downloads/WT_32C_50__75_85NOHL_26_0305 (1).xlsx"
-start_idx = 1026
-end_idx = 1505
+file_path = "C:/Users/gusta/Downloads/WT_32C_40_75NOHL_26_0313.xlsx"
+start_idx = 797
+end_idx = 1402
 flow_window = 20 
 Q_val = 0.001  # Ruído de processo para 2ª ordem (menor = mais estável)
 
@@ -157,8 +157,8 @@ plt.title('Taxa Instantânea vs Média (ml/h)')
 plt.legend(); plt.grid(True, alpha=0.3); plt.show()
 
 plt.figure(figsize=(10, 5))
-plt.plot(tempo, df_data['Vazão [m3/h]'], alpha=0.7,label='Vazão [m3/h]')
-plt.plot(tempo, df_data['UC_In [°C]'], alpha=0.7,label='UC_In')
+#plt.plot(tempo, df_data['Vazão [m3/h]'], alpha=0.7,label='Vazão [m3/h]')
+#plt.plot(tempo, df_data['UC_In [°C]'], alpha=0.7,label='UC_In')
 plt.plot(tempo, df_data['H20_1 [°C]'], alpha=0.7,label='H20_1')
 plt.plot(tempo, df_data['H20_2 [°C]'], alpha=0.7,label='H20_2')
 plt.plot(tempo, df_data['H20_3 [°C]'], alpha=0.7,label='H20_3')

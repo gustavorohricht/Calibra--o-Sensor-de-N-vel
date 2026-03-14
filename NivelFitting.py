@@ -7,87 +7,87 @@ from sklearn.linear_model import LinearRegression
 # ==========================================
 # 1. CONFIGURAÇÕES
 # ==========================================
-# Altere para o caminho do seu arquivo
-caminho_arquivo = 'C:/Users/gusta/Downloads/WT_24C_50__75NOHL_26_0306.xlsx'
+caminho_arquivo = 'C:/Users/gusta/Downloads/WT_32C_40_75NOHL_26_0313.xlsx'
 nome_aba = 'Nível'
-tolerancia = 0.5 # Agora a tolerância é de 0.5 mm (fixa)
+tolerancia = 0.7   # mm para cima ou para baixo da sua estimativa 'on'
+min_pontos = 10     # Mínimo de pontos para considerar um patamar
 
 # ==========================================
-# 2. CARREGAR E TRATAR DADOS
+# 2. CARREGAR E TRATAR REFERÊNCIAS
 # ==========================================
 df = pd.read_excel(caminho_arquivo, sheet_name=nome_aba)
 
-# Função para corrigir valores que o Excel converteu para Data
-def corrigir_valor_on(val):
-    if pd.isna(val) or val == -1 or str(val) == '-1':
-        return np.nan
-    if isinstance(val, (int, float)):
-        return float(val)
-    try:
-        if hasattr(val, 'day') and hasattr(val, 'month'):
-            # Lógica: dia 5 e mês 5 -> 5.5; dia 9 e mês 1 -> 9.0
-            decimal = val.month / 10.0 if val.month > 1 else 0.0
-            return val.day + decimal
-    except:
-        pass
-    return np.nan
+def corrigir_valor(val):
+    if pd.isna(val) or str(val) == '-1': return np.nan
+    try: return float(val)
+    except: return np.nan # Caso seja data, você pode reativar a lógica anterior aqui
 
-# Preparar dados de referência (colunas ml e on)
-ref_data = df[['ml', 'on']].dropna().copy()
-ref_data['on_ajustado'] = ref_data['on'].apply(corrigir_valor_on)
-ref_data = ref_data[ref_data['ml'] > 0] # Ignora o ponto de 0 ml
+# Pega a tabela de ml/on/off (independente de onde esteja no tempo)
+ref_data = df[['ml', 'on']].dropna(subset=['ml']).copy()
+ref_data['on_ref'] = ref_data['on'].apply(corrigir_valor)
+ref_data = ref_data[ref_data['ml'] > 0] # Ignora 0 ml
 
 # ==========================================
-# 3. CÁLCULO DAS MÉDIAS REAIS (FAIXA FIXA EM MM)
+# 3. BUSCA DO MAIOR PATAMAR ESTÁVEL (LÓGICA NOVA)
 # ==========================================
-niveis_brutos = df['Nível da Água [mm]'].values
+niveis_sensor = df['Nível da Água [mm]'].values
 resultados = []
 
 for _, row in ref_data.iterrows():
-    val_ref = row['on_ajustado']
+    vol = row['ml']
+    target = row['on_ref']
     
-    # MUDANÇA: Tolerância fixa em mm
-    limite_inf = val_ref - tolerancia
-    limite_sup = val_ref + tolerancia
+    # Encontrar o maior bloco contínuo dentro da tolerância
+    best_start, best_end = 0, 0
+    max_len = 0
     
-    # Seleciona pontos na faixa absoluta (ex: ref +/- 0.5mm)
-    faixa_pontos = niveis_brutos[(niveis_brutos >= limite_inf) & (niveis_brutos <= limite_sup)]
+    atual_start = 0
+    em_bloco = False
     
-    if len(faixa_pontos) > 0:
-        media_real = np.mean(faixa_pontos)
-        resultados.append({'ml': row['ml'], 'mm_real': media_real})
+    for i in range(len(niveis_sensor)):
+        if abs(niveis_sensor[i] - target) <= tolerancia:
+            if not em_bloco:
+                atual_start = i
+                em_bloco = True
+        else:
+            if em_bloco:
+                comprimento = i - atual_start
+                if comprimento > max_len:
+                    max_len = comprimento
+                    best_start, best_end = atual_start, i
+                em_bloco = False
+    
+    # Verifica último bloco se o arquivo acabar em estabilidade
+    if em_bloco:
+        if (len(niveis_sensor) - atual_start) > max_len:
+            max_len = len(niveis_sensor) - atual_start
+            best_start, best_end = atual_start, len(niveis_sensor)
+
+    if max_len >= min_pontos:
+        media_real = np.mean(niveis_sensor[best_start:best_end])
+        resultados.append({'ml': vol, 'mm_real': media_real, 'pontos': max_len})
+        print(f"Volume {vol}ml: Encontrado patamar de {max_len} pontos. Média: {media_real:.3f}mm")
+    else:
+        print(f"Volume {vol}ml: Nenhum patamar estável de pelo menos {min_pts} pontos encontrado!")
 
 df_final = pd.DataFrame(resultados)
 
 # ==========================================
-# 4. REGRESSÃO LINEAR (ml = f(mm))
+# 4. REGRESSÃO E GRÁFICO
 # ==========================================
 X = df_final['mm_real'].values.reshape(-1, 1)
 y = df_final['ml'].values
 modelo = LinearRegression().fit(X, y)
 
-# ==========================================
-# 5. VISUALIZAÇÃO E RESULTADOS
-# ==========================================
 plt.figure(figsize=(10, 6))
-
-# Plotar os pontos médios calculados
-plt.scatter(df_final['mm_real'], df_final['ml'], color='blue', label='Médias Reais (±0.5mm)')
-
-# Gerar linha de tendência
-x_tendencia = np.array([df_final['mm_real'].min(), df_final['mm_real'].max()]).reshape(-1, 1)
-y_tendencia = modelo.predict(x_tendencia)
-plt.plot(x_tendencia, y_tendencia, color='red', 
+plt.scatter(df_final['mm_real'], df_final['ml'], color='blue', label='Médias Estáveis (ON)')
+x_plot = np.linspace(df_final['mm_real'].min(), df_final['mm_real'].max(), 100).reshape(-1, 1)
+plt.plot(x_plot, modelo.predict(x_plot), color='red', 
          label=f'Regressão: ml = {modelo.coef_[0]:.4f}*mm + ({modelo.intercept_:.4f})\nR²: {modelo.score(X, y):.4f}')
 
-plt.xlabel('Nível da Água [mm]')
+plt.title('Regressão Linear: Volume vs Nível (Busca de Patamar Estável)')
+plt.xlabel('Nível Médio Real [mm]')
 plt.ylabel('Volume [ml]')
-plt.title('Regressão Linear: Volume em função do Nível (Tolerância Fixa 0.5mm)')
-plt.legend()
-plt.grid(True, linestyle='--', alpha=0.7)
-plt.show()
+plt.legend(); plt.grid(True, alpha=0.3); plt.show()
 
-print(f"Equação da Regressão: ml = {modelo.coef_[0]:.4f} * mm + ({modelo.intercept_:.4f})")
-print(f"R² (Precisão): {modelo.score(X, y):.4f}")
-print("\nTabela de Médias Calculadas:")
-print(df_final)
+print(f"\nEquação: ml = {modelo.coef_[0]:.4f} * mm + ({modelo.intercept_:.4f})")
