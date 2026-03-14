@@ -68,7 +68,7 @@ for _, row in ref_data.iterrows():
         resultados.append({'ml': vol, 'mm_real': media_real, 'pontos': max_len})
         print(f"Volume {vol}ml: Encontrado patamar de {max_len} pontos. Média: {media_real:.3f}mm")
     else:
-        print(f"Volume {vol}ml: Nenhum patamar estável de pelo menos {min_pts} pontos encontrado!")
+        print(f"Volume {vol}ml: Nenhum patamar estável de pelo menos {min_pontos} pontos encontrado!")
 
 df_final = pd.DataFrame(resultados)
 
