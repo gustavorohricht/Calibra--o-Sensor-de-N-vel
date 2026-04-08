@@ -8,11 +8,18 @@ import numpy as np
 # ==========================================
 # 1. CONFIGURAÇÕES
 # ==========================================
-file_path = "C:/Users/gusta/Downloads/WT_32C_40_75NOHL_26_0313.xlsx"
-start_idx = 797
-end_idx = 1402
+file_path = "C:/Users/gusta/Downloads/WT_32C_40_73HL_26_0407.xlsx"
+start_idx = 217
+end_idx = 851
+level_col = 'Nível da Água [mm]'
+time_col = 'Tempo Corrido [s]'
+subset = [level_col]
+moving_avg_window = 40
 flow_window = 20 
 Q_val = 0.001  # Ruído de processo para 2ª ordem (menor = mais estável)
+
+# Ajuste esta equação conforme sua calibração: V = a * nível + b
+volume_eq = lambda mm: 78.4206 * mm + (-142.6356)
 
 # ==========================================
 # 2. CARGA E FILTRAGEM (KALMAN 2ª ORDEM ADAPTATIVO)
@@ -20,11 +27,24 @@ Q_val = 0.001  # Ruído de processo para 2ª ordem (menor = mais estável)
 df_full = pd.read_excel(file_path, sheet_name='Dados')
 df_data = df_full.iloc[start_idx:end_idx].copy().reset_index(drop=True)
 
-# Limpeza de NaNs para evitar erro nos cálculos
-df_data = df_data.dropna(subset=['Volume', 'Tempo Corrido [s]'])
+# Limpeza de NaNs e remoção de valores negativos do nível
+df_data = df_data.dropna(subset=subset + [time_col])
+df_data = df_data[df_data[level_col] >= 0].copy().reset_index(drop=True)
 
-v_raw = df_data['Volume'].values
-tempo = df_data["Tempo Corrido [s]"].values
+if df_data.empty:
+    raise ValueError('Nenhum dado válido permaneceu após remover valores negativos e NaNs.')
+
+# Suavização do nível antes de converter para volume
+df_data['Nível_MA_40'] = (
+    df_data[level_col]
+    .rolling(window=moving_avg_window, min_periods=1)
+    .mean()
+)
+
+df_data['Volume'] = df_data['Nível_MA_40'].apply(volume_eq)
+
+v_raw = df_data['Volume'].to_numpy(dtype=float)
+tempo = df_data[time_col].to_numpy(dtype=float)
 
 def apply_adaptive_kalman_2d(time, volume, Q_param):
     n = len(volume)
@@ -134,19 +154,19 @@ print("="*75)
 
 # Gráfico 1: Regressão Bruta
 plt.figure(figsize=(10, 5))
-plt.scatter(tempo, v_raw, color='gray', alpha=0.3, s=10, label='Dados Brutos')
+plt.scatter(tempo, v_raw, color='gray', alpha=0.3, s=10, label='Volume Calculado')
 plt.plot(tempo, slope_raw * tempo + int_raw, color='red', 
          label=f'Regressão Bruta: y={slope_raw:.4f}x + {int_raw:.2f}\n$R^2={r_raw**2:.4f}$')
-plt.title('Análise: Dados Brutos')
+plt.title('Análise: Volume Calculado a partir do Nível')
 plt.legend(); plt.grid(True, alpha=0.3); plt.show()
 
 # Gráfico 2: Regressão Kalman 2ª Ordem
 plt.figure(figsize=(10, 5))
-plt.scatter(tempo, v_raw, color='gray', alpha=0.15, s=10, label='Dados Brutos')
+plt.scatter(tempo, v_raw, color='gray', alpha=0.15, s=10, label='Volume Calculado')
 plt.plot(tempo, df_data['Volume_KF'], color='green', label='Kalman 2ª Ordem (Filtrado)')
 plt.plot(tempo, slope_kf * tempo + int_kf, color='blue', linestyle='--',
           label=f'Regressão Kalman: y={slope_kf:.4f}x + {int_kf:.2f}\n$R^2={r_kf**2:.4f}$')
-plt.title('Análise: Filtro de Kalman Adaptativo (2ª Ordem)')
+plt.title('Análise: Filtro de Kalman Adaptativo no Volume')
 plt.legend(); plt.grid(True, alpha=0.3); plt.show()
 
 # Gráfico 3: Estabilidade da Taxa
@@ -162,7 +182,7 @@ plt.figure(figsize=(10, 5))
 plt.plot(tempo, df_data['H20_1 [°C]'], alpha=0.7,label='H20_1')
 plt.plot(tempo, df_data['H20_2 [°C]'], alpha=0.7,label='H20_2')
 plt.plot(tempo, df_data['H20_3 [°C]'], alpha=0.7,label='H20_3')
-plt.plot(tempo, df_data['H20_4 [°C]'], alpha=0.7,label='H20_4')
+#plt.plot(tempo, df_data['H20_4 [°C]'], alpha=0.7,label='H20_4')
 plt.title('H20')
 plt.xlabel('Tempo [s]')
 plt.ylabel('Vazão [°C]')

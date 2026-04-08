@@ -7,10 +7,10 @@ from sklearn.linear_model import LinearRegression
 # ==========================================
 # 1. CONFIGURAÇÕES
 # ==========================================
-caminho_arquivo = 'C:/Users/gusta/Downloads/WT_32C_40_75NOHL_26_0313.xlsx'
+caminho_arquivo = 'C:/Users/gusta/Downloads/WT_32C_40_73HL_26_0407.xlsx'
 nome_aba = 'Nível'
-tolerancia = 0.7   # mm para cima ou para baixo da sua estimativa 'on'
-min_pontos = 10     # Mínimo de pontos para considerar um patamar
+tolerancia = 0.5   # mm para cima ou para baixo da sua estimativa 'on'
+min_pontos = 5    # Mínimo de pontos para considerar um patamar
 
 # ==========================================
 # 2. CARREGAR E TRATAR REFERÊNCIAS
